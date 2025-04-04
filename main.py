@@ -333,5 +333,7 @@ if __name__ == "__main__":
     ).value  # Updated node name
 
     # Display the animation
-    visualization_result = animate_drone_trajectory(states, actions)
+    visualization_result = animate_drone_trajectory(
+        states, actions, save_animation=True, filename="drone_mpc_simulation.mp4"
+    )
     display(visualization_result)

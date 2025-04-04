@@ -47,40 +47,51 @@ def animate_drone_trajectory(
         else:
             actions_data = actions
 
-    # Create figure and subplots for more detailed visualization
-    fig = plt.figure(figsize=(15, 10))
+    # Create figure with adjusted size to accommodate square main plot
+    fig = plt.figure(figsize=(16, 10))
 
-    # Main trajectory plot
-    ax_traj = plt.subplot2grid((3, 3), (0, 0), colspan=2, rowspan=2)
-    ax_traj.set_xlim(-2.5, 2.5)
-    ax_traj.set_ylim(-0.5, 4.5)
+    # Main trajectory plot - now with more width to accommodate square aspect ratio
+    ax_traj = plt.subplot2grid((3, 4), (0, 0), colspan=2, rowspan=2)
+
+    # Set limits for the tank
+    tank_left = -2.5
+    tank_right = 2.5
+    tank_bottom = 0
+    tank_top = TOP_Y
+
+    # Calculate plot limits with some margin
+    x_margin = 0.5
+    y_margin = 0.5
+    x_min = tank_left - x_margin
+    x_max = tank_right + x_margin
+    y_min = tank_bottom - y_margin
+    y_max = tank_top + y_margin
+
+    # Set the axis limits
+    ax_traj.set_xlim(x_min, x_max)
+    ax_traj.set_ylim(y_min, y_max)
+
+    # Set equal aspect ratio to ensure square plot
+    ax_traj.set_aspect("equal")
+
     ax_traj.set_xlabel("X Position (m)")
     ax_traj.set_ylabel("Y Position (m)")
     ax_traj.set_title("Underwater Drone MPC Simulation")
     ax_traj.grid(True)
 
     # Velocity plot
-    ax_vel = plt.subplot2grid((3, 3), (2, 0), colspan=2)
+    ax_vel = plt.subplot2grid((3, 4), (2, 0), colspan=2)
     ax_vel.set_xlabel("Time (s)")
     ax_vel.set_ylabel("Velocity (m/s)")
     ax_vel.set_title("Drone Velocities")
     ax_vel.grid(True)
 
     # Control inputs plot
-    ax_ctrl = plt.subplot2grid((3, 3), (0, 2), rowspan=3)
+    ax_ctrl = plt.subplot2grid((3, 4), (0, 2), rowspan=3, colspan=2)
     ax_ctrl.set_xlabel("Time (s)")
     ax_ctrl.set_ylabel("Control Force (N)")
     ax_ctrl.set_title("MPC Control Actions")
     ax_ctrl.grid(True)
-
-    # Adjust layout
-    plt.tight_layout()
-
-    # Draw the tank boundaries
-    tank_left = -2.5
-    tank_right = 2.5
-    tank_bottom = 0
-    tank_top = TOP_Y
 
     # Draw tank walls
     ax_traj.plot(
@@ -212,6 +223,12 @@ def animate_drone_trajectory(
     (time_indicator_vel,) = ax_vel.plot([0, 0], [-vel_max, vel_max], "k--", alpha=0.5)
     if actions_data is not None:
         (time_indicator_ctrl,) = ax_ctrl.plot([0, 0], [-f_max, f_max], "k--", alpha=0.5)
+
+    # Adjust layout to accommodate square aspect ratio
+    plt.tight_layout()
+
+    # Further adjust positions to avoid overlap due to aspect ratio
+    plt.subplots_adjust(wspace=0.3, hspace=0.3)
 
     def init():
         """Initialize the animation"""
