@@ -1,0 +1,10 @@
+[project]
+name = "rg-mpc-demo"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "casadi>=3.7.0",
+    "regelum>=0.1.0",
+]
