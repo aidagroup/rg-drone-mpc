@@ -910,12 +910,16 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "casadi" },
+    { name = "matplotlib" },
+    { name = "numpy" },
     { name = "regelum" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "casadi", specifier = ">=3.7.0" },
+    { name = "matplotlib", specifier = ">=3.10.1" },
+    { name = "numpy", specifier = ">=2.2.4" },
     { name = "regelum", specifier = ">=0.1.0" },
 ]
 
