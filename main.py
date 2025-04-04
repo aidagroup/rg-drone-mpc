@@ -14,10 +14,10 @@ import casadi as ca
 from typing import Callable, Tuple
 from regelum.node.core.variable import Variable
 from regelum import symbolic_mode
-from IPython.display import display
 from regelum.node.memory.buffer import DataBuffer
 from objective import create_drone_objective_for_mpc
 from constraints import add_drone_obstacle_constraints
+from IPython.display import display
 
 # Constants
 from constants import (

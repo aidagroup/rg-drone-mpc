@@ -31,41 +31,112 @@ This repository contains a Model Predictive Control (MPC) implementation for an 
 
 ## Installation
 
-1. Clone the repository:
+You can install and run this project using either traditional pip or uv package manager.
 
+### Using uv (Recommended)
+
+1. Install uv if you don't have it already:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+2. Clone the repository:
+```bash
+git clone https://github.com/yourusername/rg_mpc_demo.git
+cd rg_mpc_demo
+```
+
+3. Install dependencies and create a virtual environment:
+```bash
+uv sync
+```
+This will create a virtual environment in `.venv` and install all dependencies from the lockfile.
+
+4. Activate the virtual environment (optional):
+```bash
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
+
+5. Run the simulation:
+```bash
+uv run python test_mpc.py
+```
+
+### Using pip
+
+1. Clone the repository:
 ```bash
 git clone https://github.com/yourusername/rg_mpc_demo.git
 cd rg_mpc_demo
 ```
 
 2. Create and activate a virtual environment:
-
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
 3. Install dependencies:
-
 ```bash
 pip install -e .
 ```
 
-This will install the package along with all dependencies specified in pyproject.toml.
-
-## Running the Simulation
-
-To run the simulation, execute the main script:
-
+4. Run the simulation:
 ```bash
 python test_mpc.py
 ```
 
-This will:
+## Running the Simulation
+
+The simulation will:
 1. Initialize the underwater drone and MPC controller
 2. Run the simulation for 400 time steps
 3. Generate and display an animation of the drone's trajectory
 4. Save the animation to "drone_mpc_simulation.mp4"
+
+### Alternative Execution Methods with uv
+
+Run with specific dependencies:
+```bash
+uv run --with matplotlib --with numpy python test_mpc.py
+```
+
+Run a specific function or module:
+```bash
+uv run -m test_mpc
+```
+
+## Docker Integration
+
+To run this project in Docker:
+
+1. Create a Dockerfile:
+```dockerfile
+FROM python:3.12-slim
+
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+WORKDIR /app
+
+# Copy only dependency files first for better caching
+COPY pyproject.toml uv.lock .python-version ./
+
+# Create virtual environment and install dependencies
+RUN uv sync --frozen
+
+# Copy the rest of the application
+COPY . .
+
+# Run the simulation
+CMD ["uv", "run", "python", "test_mpc.py"]
+```
+
+2. Build and run the container:
+```bash
+docker build -t underwater-drone-mpc .
+docker run -it underwater-drone-mpc
+```
 
 ## Simulation Components
 
@@ -105,6 +176,12 @@ If the animation fails to save:
 - Ensure you have ffmpeg installed (`sudo apt-get install ffmpeg` on Ubuntu)
 - Check file permissions in your output directory
 - Try using a different output format (change filename extension to .gif)
+
+### uv-related Issues
+
+- If you encounter Python version compatibility issues, check your `.python-version` file
+- If dependencies fail to resolve, try running `uv lock` to generate a fresh lockfile
+- For more detailed logs, use `uv sync --verbose`
 
 ## License
 
