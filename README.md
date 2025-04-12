@@ -1,5 +1,7 @@
 # Underwater Drone MPC Simulation
 
+![Drone MPC Simulation](drone_simulation.gif)
+
 ## Project Overview
 
 This repository contains a Model Predictive Control (MPC) implementation for an underwater drone system using the regelum package. The simulation demonstrates a drone navigating through a water tank with an obstacle to reach a target hole at the top of the tank.
@@ -59,7 +61,7 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 5. Run the simulation:
 ```bash
-uv run python test_mpc.py
+uv run python main.py
 ```
 
 ### Using pip
@@ -83,7 +85,7 @@ pip install -e .
 
 4. Run the simulation:
 ```bash
-python test_mpc.py
+python main.py
 ```
 
 ## Running the Simulation
@@ -98,44 +100,12 @@ The simulation will:
 
 Run with specific dependencies:
 ```bash
-uv run --with matplotlib --with numpy python test_mpc.py
+uv run --with matplotlib --with numpy python main.py
 ```
 
 Run a specific function or module:
 ```bash
-uv run -m test_mpc
-```
-
-## Docker Integration
-
-To run this project in Docker:
-
-1. Create a Dockerfile:
-```dockerfile
-FROM python:3.12-slim
-
-# Install uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-
-WORKDIR /app
-
-# Copy only dependency files first for better caching
-COPY pyproject.toml uv.lock .python-version ./
-
-# Create virtual environment and install dependencies
-RUN uv sync --frozen
-
-# Copy the rest of the application
-COPY . .
-
-# Run the simulation
-CMD ["uv", "run", "python", "test_mpc.py"]
-```
-
-2. Build and run the container:
-```bash
-docker build -t underwater-drone-mpc .
-docker run -it underwater-drone-mpc
+uv run -m main.py
 ```
 
 ## Simulation Components

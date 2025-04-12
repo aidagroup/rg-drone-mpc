@@ -1,4 +1,4 @@
-from matplotlib.patches import Ellipse
+from matplotlib.patches import Ellipse, Rectangle, Polygon
 import matplotlib.pyplot as plt
 from IPython.display import HTML
 from matplotlib.animation import FuncAnimation
@@ -9,6 +9,222 @@ from constants import (
     HOLE_WIDTH,
 )
 import numpy as np
+import matplotlib.patches as patches
+
+
+# Define tank constants if not already in constants.py
+TANK_WIDTH = 5.0  # Same as tank_right - tank_left
+
+
+class Tank:
+    """
+    Manages the container geometry (bounding walls + internal obstacles + top hole),
+    handles collisions, and provides a draw() method for visualization.
+    Also has methods to init and update water lines that drift left->right.
+    """
+
+    def __init__(self, drone_radius=DRONE_RADIUS, water_drift_speed=0.5):
+        """
+        water_drift_speed: how many x-units per "unit time" the dashes drift.
+        """
+
+        # Tank bounding box
+        self.x_min = -TANK_WIDTH / 2.0
+        self.x_max = TANK_WIDTH / 2.0
+        self.y_min = 0.0
+        self.y_max = TOP_Y
+
+        # Make a hole at the top, in the center, sized ~ 2 * drone diameter
+        self.hole_width = 4.0 * drone_radius
+
+        # Define internal obstacles: "wall with downward horns"
+        self.obstacles = [
+            {
+                "type": "rect",
+                "x_min": -0.6,
+                "x_max": 0.6,
+                "y_min": 2.0,
+                "y_max": 2.2,
+            },  #  the "bar"
+            {
+                "type": "rect",
+                "x_min": -0.6,
+                "x_max": -0.4,
+                "y_min": 1.5,
+                "y_max": 2.2,
+            },  # left "horn"
+            {
+                "type": "rect",
+                "x_min": 0.4,
+                "x_max": 0.6,
+                "y_min": 1.5,
+                "y_max": 2.2,
+            },  # right "horn"
+        ]
+
+        # For plotting "water lines"
+        np.random.seed(0)
+        y_lines = np.linspace(self.y_min + 0.2, self.y_max - 0.2, 10)
+        y_lines += (np.random.rand(len(y_lines)) - 0.5) * 0.2  # small shuffle
+
+        # Store base segments so we can shift them each frame
+        self.water_segments = []
+        for y_line in y_lines:
+            n_segments = 5  # number of horizontal dashes at this y
+            segs = []
+            for _ in range(n_segments):
+                seg_len = np.random.uniform(0.1, 0.3)
+                x_start = np.random.uniform(
+                    self.x_min + 0.2, self.x_max - 0.2 - seg_len
+                )
+                segs.append((x_start, x_start + seg_len))
+            self.water_segments.append((y_line, segs))
+
+        self.water_drift_speed = water_drift_speed
+
+        # Create line objects in init_water_visual()
+        self.water_line_objects = []  # list of line2D objects
+        self._base_segments = None  # to store the original data for each line
+        self._cumulative_shift = 0.0  # Track accumulated shift
+
+    def draw_static(self, ax):
+        """
+        Draw bounding region in light blue, black walls, obstacles.
+        Does NOT draw the 'floating' water lines.
+        We'll handle them in init/update_water_visual() so we can animate them.
+        """
+        # Light-blue rectangle
+        width = self.x_max - self.x_min
+        height = self.y_max - self.y_min
+        water_patch = patches.Rectangle(
+            (self.x_min, self.y_min),
+            width,
+            height,
+            facecolor="lightblue",
+            edgecolor=None,
+            alpha=0.4,
+            zorder=0,
+        )
+        ax.add_patch(water_patch)
+
+        # Walls
+        wall_thickness = 0.05
+
+        # Bottom
+        bottom_wall = patches.Rectangle(
+            (self.x_min, self.y_min), width, wall_thickness, facecolor="black"
+        )
+        ax.add_patch(bottom_wall)
+        # Left
+        left_wall = patches.Rectangle(
+            (self.x_min, self.y_min), wall_thickness, height, facecolor="black"
+        )
+        ax.add_patch(left_wall)
+        # Right
+        right_wall = patches.Rectangle(
+            (self.x_max - wall_thickness, self.y_min),
+            wall_thickness,
+            height,
+            facecolor="black",
+        )
+        ax.add_patch(right_wall)
+        # Top left
+        hole_left = -self.hole_width / 2
+        top_left_width = hole_left - self.x_min
+        if top_left_width > 0:
+            top_left_wall = patches.Rectangle(
+                (self.x_min, self.y_max),
+                top_left_width,
+                wall_thickness,
+                facecolor="black",
+            )
+            ax.add_patch(top_left_wall)
+        # Top right
+        hole_right = self.hole_width / 2
+        top_right_width = self.x_max - hole_right
+        if top_right_width > 0:
+            top_right_wall = patches.Rectangle(
+                (hole_right, self.y_max),
+                top_right_width,
+                wall_thickness,
+                facecolor="black",
+            )
+            ax.add_patch(top_right_wall)
+
+        # Obstacles
+        for obs in self.obstacles:
+            if obs["type"] == "rect":
+                w = obs["x_max"] - obs["x_min"]
+                h = obs["y_max"] - obs["y_min"]
+                rpatch = patches.Rectangle(
+                    (obs["x_min"], obs["y_min"]), w, h, facecolor="black"
+                )
+                ax.add_patch(rpatch)
+
+    def init_water_visual(self, ax):
+        # Clear old references
+        self.water_line_objects.clear()
+        self._base_segments = []
+
+        for y_line, segs in self.water_segments:
+            for xs, xe in segs:
+                (line_obj,) = ax.plot(
+                    [xs, xe], [y_line, y_line], color="white", linewidth=2, zorder=1
+                )
+                self.water_line_objects.append(line_obj)
+                # Store the current absolute positions so we can do incremental shifts.
+                self._base_segments.append((y_line, xs, xe))
+
+        # Reset the shift each time we init
+        self._cumulative_shift = 0.0
+
+        return self.water_line_objects
+
+    def update_water_visual_incr(self, dt=0.02):
+        """
+        Incrementally shift each dash by water_drift_speed * dt.
+        As soon as its right edge crosses x_max, we re-randomize
+        the dash near x_min (no gap).
+        Similarly, if its left edge crosses x_min, we re-randomize
+        it near x_max, etc.
+        """
+        d_shift = self.water_drift_speed * dt
+        width = self.x_max - self.x_min
+
+        for i, line_obj in enumerate(self.water_line_objects):
+            y_line, xs_abs, xe_abs = self._base_segments[i]
+
+            # 1) shift them incrementally
+            xs_new = xs_abs + d_shift
+            xe_new = xe_abs + d_shift
+
+            # 2) if the dash's right edge is beyond x_max => re-randomize at x_min
+            #    That means we spawn a "fresh" dash so there's no gap in time
+            if xe_new >= self.x_max:
+                seg_len = np.random.uniform(0.1, 0.3)
+                xs_new = self.x_min
+                xe_new = xs_new + seg_len
+
+            #  optionally handle the left boundary similarly:
+            elif xs_new <= self.x_min:
+                seg_len = np.random.uniform(0.1, 0.3)
+                xe_new = self.x_max
+                xs_new = xe_new - seg_len
+
+            # 3) clamp partial overlaps to avoid "stretched" lines
+            xs_cl = np.clip(xs_new, self.x_min, self.x_max)
+            xe_cl = np.clip(xe_new, self.x_min, self.x_max)
+
+            if xs_cl >= xe_cl:
+                # Hide the dash if no valid overlap
+                line_obj.set_data([], [])
+            else:
+                line_obj.set_data([xs_cl, xe_cl], [y_line, y_line])
+
+            # 4) store them as the new absolute positions
+            self._base_segments[i] = (y_line, xs_new, xe_new)
+
+        return self.water_line_objects
 
 
 def animate_drone_trajectory(
@@ -53,11 +269,14 @@ def animate_drone_trajectory(
     # Main trajectory plot - now with more width to accommodate square aspect ratio
     ax_traj = plt.subplot2grid((3, 4), (0, 0), colspan=2, rowspan=2)
 
-    # Set limits for the tank
-    tank_left = -2.5
-    tank_right = 2.5
-    tank_bottom = 0
-    tank_top = TOP_Y
+    # Create tank object for visualization
+    tank = Tank(drone_radius=DRONE_RADIUS, water_drift_speed=0.5)
+
+    # Set limits for the tank - use tank dimensions
+    tank_left = tank.x_min
+    tank_right = tank.x_max
+    tank_bottom = tank.y_min
+    tank_top = tank.y_max
 
     # Calculate plot limits with some margin
     x_margin = 0.5
@@ -93,44 +312,11 @@ def animate_drone_trajectory(
     ax_ctrl.set_title("MPC Control Actions")
     ax_ctrl.grid(True)
 
-    # Draw tank walls
-    ax_traj.plot(
-        [tank_left, tank_left],
-        [tank_bottom, tank_top],
-        "k-",
-        linewidth=2,
-        label="Tank Wall",
-    )
-    ax_traj.plot([tank_right, tank_right], [tank_bottom, tank_top], "k-", linewidth=2)
-    ax_traj.plot([tank_left, tank_right], [tank_bottom, tank_bottom], "k-", linewidth=2)
+    # Draw tank static elements (walls, obstacles, water background)
+    tank.draw_static(ax_traj)
 
-    # Draw the hole at the top
-    hole_half_width = HOLE_WIDTH / 2
-    ax_traj.plot([tank_left, -hole_half_width], [tank_top, tank_top], "k-", linewidth=2)
-    ax_traj.plot([hole_half_width, tank_right], [tank_top, tank_top], "k-", linewidth=2)
-
-    # Mark the hole with a different color
-    ax_traj.plot(
-        [-hole_half_width, hole_half_width],
-        [tank_top, tank_top],
-        "g-",
-        linewidth=3,
-        label="Target Hole",
-    )
-
-    # Draw the obstacle (ellipse)
-    obstacle = Ellipse(
-        (0, 1.1),  # Center coordinates
-        width=2 * 0.5,  # Semi-major axis * 2
-        height=2 * 0.1,  # Semi-minor axis * 2
-        angle=0,  # Orientation angle
-        facecolor="red",
-        alpha=0.3,
-        edgecolor="red",
-        linewidth=2,
-        label="Obstacle",
-    )
-    ax_traj.add_patch(obstacle)
+    # Initialize water lines
+    water_lines = tank.init_water_visual(ax_traj)
 
     # Create a drone object
     drone_body = plt.Circle(
@@ -240,6 +426,10 @@ def animate_drone_trajectory(
         vy_line.set_data([], [])
         time_indicator_vel.set_data([0, 0], [-vel_max, vel_max])
 
+        # Initialize water lines
+        for line in water_lines:
+            line.set_data([], [])
+
         if actions_data is not None:
             f_long_line.set_data([], [])
             f_lat_line.set_data([], [])
@@ -255,6 +445,7 @@ def animate_drone_trajectory(
                 f_long_line,
                 f_lat_line,
                 time_indicator_ctrl,
+                *water_lines,
             )
         else:
             return (
@@ -265,6 +456,7 @@ def animate_drone_trajectory(
                 vx_line,
                 vy_line,
                 time_indicator_vel,
+                *water_lines,
             )
 
     def update(frame_idx):
@@ -301,6 +493,9 @@ def animate_drone_trajectory(
         vy_line.set_data(times[: i + 1], vy_data[: i + 1])
         time_indicator_vel.set_data([current_time, current_time], [-vel_max, vel_max])
 
+        # Update water lines
+        updated_water_lines = tank.update_water_visual_incr(dt=time_step_size)
+
         # Update control plot if actions are available
         if actions_data is not None:
             idx = min(i, len(actions_data) - 1)
@@ -319,6 +514,7 @@ def animate_drone_trajectory(
                 f_long_line,
                 f_lat_line,
                 time_indicator_ctrl,
+                *updated_water_lines,
             )
         else:
             return (
@@ -329,6 +525,7 @@ def animate_drone_trajectory(
                 vx_line,
                 vy_line,
                 time_indicator_vel,
+                *updated_water_lines,
             )
 
     # Create animation
